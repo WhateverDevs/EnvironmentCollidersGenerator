@@ -2,7 +2,7 @@
   "name": "whateverdevs.environmentcollidersgenerator",
   "version": "0.0.1",
   "dependencies": {
-    "whateverdevs.core": "0.0.89"
+    "whateverdevs.core": "0.0.90"
   },
   "displayName": "Environment Colliders Generator",
   "description": "Tool to autogenerate a colliders scene from a meshes scene.",

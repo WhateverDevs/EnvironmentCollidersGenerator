@@ -11,9 +11,8 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
     {
         /// <summary>
         /// Relation between tags and physic materials to add to the colliders created with those tags.
-        /// TODO: Change this string to a tag reference or something so only tags can be selected. This should be done in the core.
         /// </summary>
-        public SerializableDictionary<string, PhysicMaterial> TagToPhysicMaterial =
-            new SerializableDictionary<string, PhysicMaterial>();
+        public SerializableDictionary<Tag, PhysicMaterial> TagToPhysicMaterial =
+            new SerializableDictionary<Tag, PhysicMaterial>();
     }
 }

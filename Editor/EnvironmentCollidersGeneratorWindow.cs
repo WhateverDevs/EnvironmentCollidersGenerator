@@ -4,13 +4,14 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using WhateverDevs.Core.Editor.Common;
 
 namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
 {
     /// <summary>
     /// Editor window to create a colliders scene from an environment scene.
     /// </summary>
-    public class EnvironmentCollidersGeneratorWindow : EditorWindow
+    public class EnvironmentCollidersGeneratorWindow : LoggableEditorWindow<EnvironmentCollidersGeneratorWindow>
     {
         /// <summary>
         /// Reference to the scene where the environment is.
@@ -97,10 +98,10 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
             if (consistencyCheck)
             {
                 if (consistent)
-                    EditorGUILayout.HelpBox("The environment prefab is consistent.", MessageType.Info);
+                    EditorGUILayout.HelpBox("The environment scene is consistent.", MessageType.Info);
                 else
                     EditorGUILayout
-                       .HelpBox("There are consistency errors in the environment prefab, check the console.",
+                       .HelpBox("There are consistency errors in the environment scene, check the console.",
                                 MessageType.Error);
             }
 
@@ -189,9 +190,9 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
 
                     if (filter == null)
                     {
-                        Debug.LogError("#Collider creator #Renderer "
-                                     + meshRenderers[i].name
-                                     + " is missing a mesh filter.");
+                        Logger.Error("Renderer "
+                                   + meshRenderers[i].name
+                                   + " is missing a mesh filter.");
 
                         consistent = false;
                         continue;
@@ -204,16 +205,30 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
                     // TODO: Uncomment if we use probuilder at some point.
                     /*if (filter.GetComponent<ProBuilderMesh>() != null)
                             {
-                                Debug.Log("#Collider creator #Renderer "
+                                Logger.Info("Renderer "
                                         + meshRenderers[i].name
                                         + " is ignored as it uses probuilder.");
                                 continue;
                             }*/
 
-                    Debug.LogError("#Collider creator #Renderer "
-                                 + meshRenderers[i].name
-                                 + " is missing a mesh.");
+                    Logger.Error("Renderer "
+                               + meshRenderers[i].name
+                               + " is missing a mesh.");
 
+                    consistent = false;
+                }
+
+                SkinnedMeshRenderer[] skinnedMeshRenderers = FindObjectsOfType<SkinnedMeshRenderer>();
+
+                for (int i = 0; i < skinnedMeshRenderers.Length; i++)
+                {
+                    EditorUtility.DisplayProgressBar("Checking consistency",
+                                                     skinnedMeshRenderers[i].name,
+                                                     (float) i / skinnedMeshRenderers.Length);
+
+                    if (skinnedMeshRenderers[i].sharedMesh != null) continue;
+                    
+                    Logger.Error("Renderer " + skinnedMeshRenderers[i].name + " is missing a mesh!");
                     consistent = false;
                 }
 
@@ -237,12 +252,20 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
                 EditorUtility.DisplayProgressBar("Generating colliders", "Loading environment scene...", 0f);
 
                 EditorSceneManager.OpenScene(AssetDatabase.GetAssetPath(environmentScene));
+                
+                EditorUtility.DisplayProgressBar("Generating colliders", "Finding lods...", .05f);
+                
+                LODGroup[] lodGroups = FindObjectsOfType<LODGroup>();
+                
+                // TODO: Register meshes in lods to use only the lod2 meshes and ignore the rest.
 
                 EditorUtility.DisplayProgressBar("Generating colliders", "Finding renderers...", .1f);
 
                 MeshRenderer[] meshRenderers = FindObjectsOfType<MeshRenderer>();
+                SkinnedMeshRenderer[] skinnedMeshRenderers = FindObjectsOfType<SkinnedMeshRenderer>();
 
-                Debug.Log("#Collider creator #Found " + meshRenderers.Length + " meshes on the environment.");
+                Logger.Info("Found " + meshRenderers.Length + " meshes on the environment.");
+                Logger.Info("Found " + skinnedMeshRenderers.Length + " skinned meshes on the environment.");
 
                 List<Mesh> meshes = new List<Mesh>();
                 List<Vector3> positions = new List<Vector3>();
@@ -257,18 +280,33 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
                     // TODO: Uncomment if we use probuilder at some point.
                     /*if (meshRenderers[i].GetComponent<ProBuilderMesh>() != null)
                     {
-                        Debug.Log("#Collider creator #Renderer "
+                        Logger.Info("Renderer "
                                 + meshRenderers[i].name
                                 + " is ignored as it uses probuilder.");
                         continue;
                     }*/
 
-                    Debug.Log("#Collider creator #Registering mesh "
-                            + meshRenderers[i].name
-                            + " for collider creation.");
+                    Logger.Info("Registering mesh "
+                              + meshRenderers[i].name
+                              + " for collider creation.");
 
                     meshes.Add(meshRenderers[i].GetComponent<MeshFilter>().sharedMesh);
                     Transform transform = meshRenderers[i].transform;
+                    positions.Add(transform.position);
+                    rotations.Add(transform.rotation);
+                    scales.Add(transform.lossyScale);
+                    tags.Add(transform.tag);
+                    layers.Add(transform.gameObject.layer);
+                }
+                
+                for (int i = 0; i < skinnedMeshRenderers.Length; i++)
+                {
+                    Logger.Info("Registering skinned mesh "
+                              + skinnedMeshRenderers[i].name
+                              + " for collider creation.");
+
+                    meshes.Add(skinnedMeshRenderers[i].sharedMesh);
+                    Transform transform = skinnedMeshRenderers[i].transform;
                     positions.Add(transform.position);
                     rotations.Add(transform.rotation);
                     scales.Add(transform.lossyScale);
@@ -310,6 +348,9 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
 
                     MeshCollider meshCollider = newCollider.AddComponent<MeshCollider>();
                     meshCollider.sharedMesh = meshes[i];
+
+                    if (library.TagToPhysicMaterial.ContainsKey(tags[i]))
+                        meshCollider.sharedMaterial = library.TagToPhysicMaterial[tags[i]];
                 }
 
                 EditorUtility.DisplayProgressBar("Generating colliders", "Saving scene...", .8f);
