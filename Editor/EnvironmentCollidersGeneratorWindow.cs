@@ -59,6 +59,71 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
         private const string LibraryPath = EditorFolderPath + "EnvironmentCollidersGeneratorLibrary.asset";
 
         /// <summary>
+        /// Renderers that will be ignored during the collider generation.
+        /// </summary>
+        private List<Renderer> renderersToIgnore;
+
+        /// <summary>
+        /// List of meshes to be used on collider generation.
+        /// </summary>
+        private List<Mesh> meshes = new List<Mesh>();
+
+        /// <summary>
+        /// The position of those meshes.
+        /// </summary>
+        private List<Vector3> positions = new List<Vector3>();
+
+        /// <summary>
+        /// The rotations of those meshes.
+        /// </summary>
+        private List<Quaternion> rotations = new List<Quaternion>();
+
+        /// <summary>
+        /// The scales of those meshes.
+        /// </summary>
+        private List<Vector3> scales = new List<Vector3>();
+
+        /// <summary>
+        /// The tags of those meshes.
+        /// </summary>
+        private List<string> tags = new List<string>();
+
+        /// <summary>
+        /// The layers of those meshes.
+        /// </summary>
+        private List<int> layers = new List<int>();
+
+        /// <summary>
+        /// Terrain data to create colliders from.
+        /// </summary>
+        private List<TerrainData> terrainData = new List<TerrainData>();
+
+        /// <summary>
+        /// The positions of those terrains.
+        /// </summary>
+        private List<Vector3> terrainPositions = new List<Vector3>();
+
+        /// <summary>
+        /// The rotations of those terrains.
+        /// </summary>
+        private List<Quaternion> terrainRotations = new List<Quaternion>();
+
+        /// <summary>
+        /// The scales of those terrains.
+        /// </summary>
+        private List<Vector3> terrainScales = new List<Vector3>();
+
+        /// <summary>
+        /// The tags of those terrains.
+        /// </summary>
+        private List<string> terrainTags = new List<string>();
+
+        /// <summary>
+        /// The layers of those terrains.
+        /// </summary>
+        private List<int> terrainLayers = new List<int>();
+
+        /// <summary>
         /// Display the window.
         /// </summary>
         [MenuItem("WhateverDevs/Scene Management/Environment Colliders Generator")]
@@ -227,7 +292,7 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
                                                      (float) i / skinnedMeshRenderers.Length);
 
                     if (skinnedMeshRenderers[i].sharedMesh != null) continue;
-                    
+
                     Logger.Error("Renderer " + skinnedMeshRenderers[i].name + " is missing a mesh!");
                     consistent = false;
                 }
@@ -252,67 +317,56 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
                 EditorUtility.DisplayProgressBar("Generating colliders", "Loading environment scene...", 0f);
 
                 EditorSceneManager.OpenScene(AssetDatabase.GetAssetPath(environmentScene));
-                
+
+                renderersToIgnore = new List<Renderer>();
+
                 EditorUtility.DisplayProgressBar("Generating colliders", "Finding lods...", .05f);
-                
+
                 LODGroup[] lodGroups = FindObjectsOfType<LODGroup>();
-                
-                // TODO: Register meshes in lods to use only the lod2 meshes and ignore the rest.
+
+                foreach (LODGroup lodGroup in lodGroups)
+                {
+                    LOD[] lods = lodGroup.GetLODs();
+
+                    // We want to ignore all lods but the last.
+                    for (int i = 0; i < lods.Length - 1; ++i) renderersToIgnore.AddRange(lods[i].renderers);
+                }
+
+                Logger.Info("Ignoring " + renderersToIgnore.Count + " renderers as they are in detail lods.");
 
                 EditorUtility.DisplayProgressBar("Generating colliders", "Finding renderers...", .1f);
 
                 MeshRenderer[] meshRenderers = FindObjectsOfType<MeshRenderer>();
                 SkinnedMeshRenderer[] skinnedMeshRenderers = FindObjectsOfType<SkinnedMeshRenderer>();
+                Terrain[] terrains = FindObjectsOfType<Terrain>();
 
                 Logger.Info("Found " + meshRenderers.Length + " meshes on the environment.");
                 Logger.Info("Found " + skinnedMeshRenderers.Length + " skinned meshes on the environment.");
+                Logger.Info("Found " + terrains.Length + " terrains on the environment.");
 
-                List<Mesh> meshes = new List<Mesh>();
-                List<Vector3> positions = new List<Vector3>();
-                List<Quaternion> rotations = new List<Quaternion>();
-                List<Vector3> scales = new List<Vector3>();
+                meshes = new List<Mesh>();
+                positions = new List<Vector3>();
+                rotations = new List<Quaternion>();
+                scales = new List<Vector3>();
 
-                List<string> tags = new List<string>();
-                List<int> layers = new List<int>();
+                tags = new List<string>();
+                layers = new List<int>();
 
-                for (int i = 0; i < meshRenderers.Length; i++)
-                {
-                    // TODO: Uncomment if we use probuilder at some point.
-                    /*if (meshRenderers[i].GetComponent<ProBuilderMesh>() != null)
-                    {
-                        Logger.Info("Renderer "
-                                + meshRenderers[i].name
-                                + " is ignored as it uses probuilder.");
-                        continue;
-                    }*/
+                terrainData = new List<TerrainData>();
+                terrainPositions = new List<Vector3>();
+                terrainRotations = new List<Quaternion>();
+                terrainScales = new List<Vector3>();
 
-                    Logger.Info("Registering mesh "
-                              + meshRenderers[i].name
-                              + " for collider creation.");
+                terrainTags = new List<string>();
+                terrainLayers = new List<int>();
 
-                    meshes.Add(meshRenderers[i].GetComponent<MeshFilter>().sharedMesh);
-                    Transform transform = meshRenderers[i].transform;
-                    positions.Add(transform.position);
-                    rotations.Add(transform.rotation);
-                    scales.Add(transform.lossyScale);
-                    tags.Add(transform.tag);
-                    layers.Add(transform.gameObject.layer);
-                }
+                RegisterMeshRenderers(meshRenderers);
+
+                RegisterSkinnedMeshRenderers(skinnedMeshRenderers);
+
+                RegisterTerrains(terrains);
                 
-                for (int i = 0; i < skinnedMeshRenderers.Length; i++)
-                {
-                    Logger.Info("Registering skinned mesh "
-                              + skinnedMeshRenderers[i].name
-                              + " for collider creation.");
-
-                    meshes.Add(skinnedMeshRenderers[i].sharedMesh);
-                    Transform transform = skinnedMeshRenderers[i].transform;
-                    positions.Add(transform.position);
-                    rotations.Add(transform.rotation);
-                    scales.Add(transform.lossyScale);
-                    tags.Add(transform.tag);
-                    layers.Add(transform.gameObject.layer);
-                }
+                EditorSceneManager.SaveOpenScenes();
 
                 EditorUtility.DisplayProgressBar("Generating colliders", "Loading colliders scene...", .2f);
 
@@ -332,26 +386,8 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
 
                 EditorUtility.DisplayProgressBar("Generating colliders", "Generating new colliders...", .6f);
 
-                for (int i = 0; i < meshes.Count; i++)
-                {
-                    GameObject newCollider = new GameObject(meshes[i].name)
-                                             {
-                                                 layer = layers[i],
-                                                 tag = tags[i]
-                                             };
-
-                    Transform transform = newCollider.GetComponent<Transform>();
-                    transform.parent = collidersParent.transform;
-                    transform.position = positions[i];
-                    transform.rotation = rotations[i];
-                    transform.localScale = scales[i];
-
-                    MeshCollider meshCollider = newCollider.AddComponent<MeshCollider>();
-                    meshCollider.sharedMesh = meshes[i];
-
-                    if (library.TagToPhysicMaterial.ContainsKey(tags[i]))
-                        meshCollider.sharedMaterial = library.TagToPhysicMaterial[tags[i]];
-                }
+                GenerateMeshColliders(collidersParent);
+                GenerateTerrainColliders(collidersParent);
 
                 EditorUtility.DisplayProgressBar("Generating colliders", "Saving scene...", .8f);
 
@@ -360,6 +396,159 @@ namespace WhateverDevs.EnvironmentCollidersGenerator.Editor
             finally
             {
                 EditorUtility.ClearProgressBar();
+            }
+        }
+
+        /// <summary>
+        /// Register the mesh renderers to generate colliders from.
+        /// </summary>
+        /// <param name="meshRenderers"></param>
+        private void RegisterMeshRenderers(IReadOnlyList<MeshRenderer> meshRenderers)
+        {
+            for (int i = 0; i < meshRenderers.Count; i++)
+            {
+                if (renderersToIgnore.Contains(meshRenderers[i])) continue;
+
+                // TODO: Uncomment if we use probuilder at some point.
+                /*if (meshRenderers[i].GetComponent<ProBuilderMesh>() != null)
+                {
+                    Logger.Info("Renderer "
+                            + meshRenderers[i].name
+                            + " is ignored as it uses probuilder.");
+                    continue;
+                }*/
+
+                Logger.Info("Registering mesh "
+                          + meshRenderers[i].name
+                          + " for collider creation.");
+
+                meshes.Add(meshRenderers[i].GetComponent<MeshFilter>().sharedMesh);
+                Transform transform = meshRenderers[i].transform;
+                positions.Add(transform.position);
+                rotations.Add(transform.rotation);
+                scales.Add(transform.lossyScale);
+                tags.Add(transform.tag);
+                layers.Add(transform.gameObject.layer);
+            }
+        }
+
+        /// <summary>
+        /// Register the skinned mesh renderers to create colliders from.
+        /// </summary>
+        /// <param name="skinnedMeshRenderers"></param>
+        private void RegisterSkinnedMeshRenderers(IReadOnlyList<SkinnedMeshRenderer> skinnedMeshRenderers)
+        {
+            for (int i = 0; i < skinnedMeshRenderers.Count; i++)
+            {
+                if (renderersToIgnore.Contains(skinnedMeshRenderers[i])) continue;
+
+                Logger.Info("Registering skinned mesh "
+                          + skinnedMeshRenderers[i].name
+                          + " for collider creation.");
+
+                meshes.Add(skinnedMeshRenderers[i].sharedMesh);
+                Transform transform = skinnedMeshRenderers[i].transform;
+                positions.Add(transform.position);
+                rotations.Add(transform.rotation);
+                scales.Add(transform.lossyScale);
+                tags.Add(transform.tag);
+                layers.Add(transform.gameObject.layer);
+            }
+        }
+
+        /// <summary>
+        /// Register the terrains to generate colliders from.
+        /// </summary>
+        /// <param name="terrains"></param>
+        private void RegisterTerrains(IReadOnlyList<Terrain> terrains)
+        {
+            for (int i = 0; i < terrains.Count; i++)
+            {
+                TerrainCollider collider = terrains[i].GetComponent<TerrainCollider>();
+
+                if (collider == null)
+                {
+                    Logger.Error("Ignoring terrain "
+                               + terrains[i].name
+                               + " as it doesn't have a terrain collider.");
+
+                    continue;
+                }
+
+                if (collider.enabled)
+                {
+                    Logger.Warn("Terrain collider on the environment scene should be disabled. Disabling it now.");
+                    collider.enabled = false;
+                }
+
+                Logger.Info("Registering terrain "
+                          + terrains[i].name
+                          + " for collider creation.");
+
+                terrainData.Add(collider.terrainData);
+                Transform transform = terrains[i].transform;
+                terrainPositions.Add(transform.position);
+                terrainRotations.Add(transform.rotation);
+                terrainScales.Add(transform.lossyScale);
+                terrainTags.Add(transform.tag);
+                terrainLayers.Add(transform.gameObject.layer);
+            }
+        }
+
+        /// <summary>
+        /// Generate the mesh colliders.
+        /// </summary>
+        /// <param name="collidersParent"></param>
+        private void GenerateMeshColliders(GameObject collidersParent)
+        {
+            for (int i = 0; i < meshes.Count; i++)
+            {
+                GameObject newCollider = new GameObject(meshes[i].name)
+                                         {
+                                             layer = layers[i],
+                                             tag = tags[i]
+                                         };
+
+                Transform transform = newCollider.transform;
+                transform.parent = collidersParent.transform;
+                transform.position = positions[i];
+                transform.rotation = rotations[i];
+                transform.localScale = scales[i];
+
+                MeshCollider meshCollider = newCollider.AddComponent<MeshCollider>();
+                meshCollider.sharedMesh = meshes[i];
+
+                if (library.TagToPhysicMaterial.ContainsKey(tags[i]))
+                    meshCollider.sharedMaterial = library.TagToPhysicMaterial[tags[i]];
+            }
+        }
+
+        /// <summary>
+        /// Generate the terrain colliders.
+        /// </summary>
+        /// <param name="collidersParent"></param>
+        private void GenerateTerrainColliders(GameObject collidersParent)
+        {
+            for (int i = 0; i < terrainData.Count; ++i)
+            {
+                GameObject newGameObject = new GameObject(terrainData[i].name)
+                                           {
+                                               layer = terrainLayers[i],
+                                               tag = terrainTags[i]
+                                           };
+
+                Transform transform = newGameObject.transform;
+                transform.parent = collidersParent.transform;
+                transform.position = terrainPositions[i];
+                transform.rotation = terrainRotations[i];
+                transform.localScale = terrainScales[i];
+
+                TerrainCollider newCollider = newGameObject.AddComponent<TerrainCollider>();
+
+                newCollider.terrainData = terrainData[i];
+
+                if (library.TagToPhysicMaterial.ContainsKey(terrainTags[i]))
+                    newCollider.sharedMaterial = library.TagToPhysicMaterial[terrainTags[i]];
             }
         }
     }
